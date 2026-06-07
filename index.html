@@ -229,7 +229,7 @@
                     this.error = '';
 
                     try {
-                        const response = await fetch('/api/auth/request-otp', {
+                        const response = await fetch('https://zmtblztvchbuvegbvgkt.supabase.co/functions/v1/request-otp', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(this.form)
