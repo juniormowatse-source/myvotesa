@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ward Civic Ledger Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-900 font-sans" x-data="ledgerApp()" @load="initApp()">
+
+    <div class="max-w-md mx-auto p-4 sm:p-6">
+        
+        <!-- Header -->
+        <header class="text-center my-6">
+            <h1 class="text-2xl font-black tracking-tight text-gray-900">WARD CIVIC LEDGER</h1>
+            <p class="text-xs text-gray-500 font-medium uppercase mt-1">Continuous Accountability Architecture</p>
+            <p class="text-xs text-gray-400 mt-2">SASSA-Verified Identity | POPIA Compliant</p>
+        </header>
+
+        <!-- Status Alerts -->
+        <div x-show="error" x-text="error" class="mb-4 p-3 bg-red-100 border border-red-200 text-red-700 text-sm rounded-lg font-semibold transition-all" style="display: none;"></div>
+        <div x-show="message" x-text="message" class="mb-4 p-3 bg-green-100 border border-green-200 text-green-700 text-sm rounded-lg font-semibold transition-all" style="display: none;"></div>
+        <div x-show="info" x-text="info" class="mb-4 p-3 bg-blue-100 border border-blue-200 text-blue-700 text-sm rounded-lg font-semibold transition-all" style="display: none;"></div>
+
+        <!-- ============ STEP 1: REQUEST OTP ============ -->
+        <div x-show="step === 'request_otp'" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div class="mb-4">
+                <h2 class="text-lg font-bold text-gray-800">1. Identity Verification via OTP</h2>
+                <p class="text-xs text-gray-500 mt-1">POPIA Compliant. Your SA ID number and RICA phone are verified. No corporate login required.</p>
+            </div>
+
+            <form @submit.prevent="requestOTP()" class="space-y-4">
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase">First Name</label>
+                        <input type="text" x-model="form.first_name" required class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-600 uppercase">Surname</label>
+                        <input type="text" x-model="form.surname" required class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">SA ID Number (13 digits)</label>
+                    <input type="text" x-model="form.id_number" required maxlength="13" pattern="\d{13}" placeholder="YYMMDDSSSSAAA" class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm tracking-widest bg-gray-50" @input="form.id_number = form.id_number.replace(/\D/g, '')">
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">RICA Mobile Number</label>
+                    <input type="tel" x-model="form.phone_number" required placeholder="0831234567 or +27831234567" class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50">
+                    <p class="text-xs text-gray-400 mt-1">Must be registered with RICA (SA telecommunications law)</p>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Target Audit Ward Number</label>
+                    <input type="number" x-model="form.ward_id" required placeholder="e.g. 20" class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50">
+                </div>
+
+                <button type="submit" :disabled="loading" class="w-full bg-blue-600 hover:bg-blue-700 text-white p-3 rounded-lg font-bold text-sm transition disabled:opacity-50">
+                    <span x-show="!loading">Request OTP via SMS</span>
+                    <span x-show="loading">Sending OTP...</span>
+                </button>
+
+                <p class="text-xs text-gray-400 text-center">You'll receive a 6-digit code via SMS</p>
+            </form>
+        </div>
+
+        <!-- ============ STEP 2: VERIFY OTP ============ -->
+        <div x-show="step === 'verify_otp'" style="display: none;" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div class="mb-4">
+                <h2 class="text-lg font-bold text-gray-800">2. Enter OTP Code</h2>
+                <p class="text-xs text-gray-500 mt-1" x-text="`We sent a 6-digit code to ${maskPhone(form.phone_number)}`"></p>
+            </div>
+
+            <form @submit.prevent="verifyOTP()" class="space-y-4">
+                
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">6-Digit OTP Code</label>
+                    <input 
+                        type="text" 
+                        x-model="otp_code" 
+                        required 
+                        maxlength="6" 
+                        pattern="\d{6}" 
+                        placeholder="000000" 
+                        class="mt-1 block w-full rounded-lg border border-gray-300 p-3 text-center text-2xl tracking-widest font-bold bg-gray-50"
+                        @input="otp_code = otp_code.replace(/\D/g, '')"
+                    >
+                    <p class="text-xs text-gray-400 mt-2">
+                        <span x-show="!otp_expires">Code expires in <span x-text="otp_expiry_countdown"></span>s</span>
+                        <span x-show="otp_expires" class="text-red-600">OTP expired - request new code</span>
+                    </p>
+                </div>
+
+                <button type="submit" :disabled="loading || otp_expires || otp_code.length !== 6" class="w-full bg-green-600 hover:bg-green-700 text-white p-3 rounded-lg font-bold text-sm transition disabled:opacity-50">
+                    <span x-show="!loading">Verify OTP</span>
+                    <span x-show="loading">Verifying...</span>
+                </button>
+
+                <button type="button" @click="step = 'request_otp'; error = ''" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-lg font-semibold text-sm transition">
+                    Back
+                </button>
+
+                <p class="text-xs text-center text-gray-400">
+                    Attempt <span x-text="otp_attempts"></span> of 3
+                </p>
+            </form>
+        </div>
+
+        <!-- ============ STEP 3: SUBMIT CIVIC REPORT ============ -->
+        <div x-show="step === 'report'" style="display: none;" class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
+            <div class="mb-4">
+                <h2 class="text-lg font-bold text-gray-800">3. Log Service Failure</h2>
+                <p class="text-xs text-gray-500 mt-1">Select the sector, rate performance, add physical notes, and capture evidence.</p>
+            </div>
+
+            <form @submit.prevent="submitReport()" class="space-y-4">
+                
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Failing Infrastructure Sector</label>
+                    <select x-model="report.sector" class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50">
+                        <option value="">-- Select Sector --</option>
+                        <option value="water">Water Interruption / Leak</option>
+                        <option value="sanitation">Sanitation & Open Sewage</option>
+                        <option value="electricity">Electricity Grid / Substation Failure</option>
+                        <option value="roads">Roads & Hazardous Potholes</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Performance Rating (1-5 Stars)</label>
+                    <div class="flex justify-between mt-2">
+                        <template x-for="i in 5" :key="i">
+                            <button 
+                                type="button"
+                                @click="report.rating = i"
+                                :class="`px-3 py-2 rounded-lg font-bold text-sm ${report.rating >= i ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-600'}`"
+                                x-text="`${i} ★`"
+                            ></button>
+                        </template>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Detailed Description</label>
+                    <textarea 
+                        x-model="report.description" 
+                        rows="4" 
+                        required
+                        placeholder="e.g., Burst pipe at corner of Khama & Sisulu Str, water flowing onto road for 3 days..."
+                        class="mt-1 block w-full rounded-lg border border-gray-300 p-2 text-sm bg-gray-50"
+                    ></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-gray-600 uppercase">Capture Evidence Photo</label>
+                    <input 
+                        type="file" 
+                        @change="handlePhotoUpload($event)"
+                        accept="image/*" 
+                        capture="environment" 
+                        class="mt-1 block w-full text-xs text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-100 file:text-blue-700 hover:file:bg-blue-200"
+                    >
+                    <div x-show="photo_preview" class="mt-2">
+                        <img :src="photo_preview" class="w-full rounded-lg border border-gray-300 max-h-40 object-cover">
+                    </div>
+                </div>
+
+                <button type="submit" :disabled="loading || !report.sector || !report.rating || report.description.length < 10" class="w-full bg-black hover:bg-gray-800 text-white p-3 rounded-lg font-bold text-sm transition disabled:opacity-50">
+                    <span x-show="!loading">Commit To Public Record</span>
+                    <span x-show="loading">Submitting Report...</span>
+                </button>
+
+                <button type="button" @click="logout()" class="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-lg font-semibold text-sm transition">
+                    Logout
+                </button>
+            </form>
+        </div>
+
+    </div>
+
+    <script>
+        function ledgerApp() {
+            return {
+                step: 'request_otp',
+                loading: false,
+                error: '',
+                message: '',
+                info: '',
+                form: {
+                    first_name: '',
+                    surname: '',
+                    id_number: '',
+                    phone_number: '',
+                    ward_id: ''
+                },
+                attempt_id: null,
+                otp_code: '',
+                otp_expiry_countdown: 900,
+                otp_expires: false,
+                otp_attempts: 0,
+                accessToken: null,
+                refreshToken: null,
+                photo_preview: null,
+                photo_file: null,
+                report: {
+                    sector: '',
+                    rating: 0,
+                    description: ''
+                },
+
+                initApp() {
+                    const token = localStorage.getItem('accessToken');
+                    if (token) {
+                        this.accessToken = token;
+                        this.refreshToken = localStorage.getItem('refreshToken');
+                        this.step = 'report';
+                        this.info = 'Welcome back! Ready to submit a report?';
+                    }
+                },
+
+                async requestOTP() {
+                    this.loading = true;
+                    this.error = '';
+
+                    try {
+                        const response = await fetch('/api/auth/request-otp', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(this.form)
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Failed to request OTP');
+                        }
+
+                        this.attempt_id = data.attempt_id;
+                        this.otp_attempts = 0;
+                        this.otp_expires = false;
+                        this.otp_expiry_countdown = 900;
+                        this.step = 'verify_otp';
+                        this.info = `OTP sent to ${this.maskPhone(this.form.phone_number)}`;
+
+                        this.startOTPCountdown();
+
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                async verifyOTP() {
+                    this.loading = true;
+                    this.error = '';
+
+                    try {
+                        const response = await fetch('/api/auth/verify-otp', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                attempt_id: this.attempt_id,
+                                otp: this.otp_code
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            this.otp_attempts++;
+                            throw new Error(data.error || 'OTP verification failed');
+                        }
+
+                        localStorage.setItem('accessToken', data.accessToken);
+                        localStorage.setItem('refreshToken', data.refreshToken);
+                        this.accessToken = data.accessToken;
+                        this.refreshToken = data.refreshToken;
+
+                        this.message = 'Identity verified! Welcome to Ward Civic Ledger.';
+                        this.step = 'report';
+
+                    } catch (err) {
+                        this.error = err.message;
+                        this.otp_code = '';
+                        if (this.otp_attempts >= 3) {
+                            this.error += ' - Request new OTP.';
+                            this.step = 'request_otp';
+                        }
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                startOTPCountdown() {
+                    const interval = setInterval(() => {
+                        this.otp_expiry_countdown--;
+                        if (this.otp_expiry_countdown <= 0) {
+                            clearInterval(interval);
+                            this.otp_expires = true;
+                        }
+                    }, 1000);
+                },
+
+                maskPhone(phone) {
+                    if (!phone) return 'your phone';
+                    return `***${phone.slice(-4)}`;
+                },
+
+                handlePhotoUpload(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        if (file.size > 5 * 1024 * 1024) {
+                            this.error = 'File too large (max 5MB)';
+                            return;
+                        }
+                        this.photo_file = file;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.photo_preview = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                async submitReport() {
+                    this.loading = true;
+                    this.error = '';
+
+                    try {
+                        const formData = new FormData();
+                        formData.append('sector', this.report.sector);
+                        formData.append('rating', this.report.rating);
+                        formData.append('description', this.report.description);
+                        if (this.photo_file) {
+                            formData.append('evidence_photo', this.photo_file);
+                        }
+
+                        const response = await fetch('/api/auth/verify-otp', {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${this.accessToken}`
+                            },
+                            body: formData
+                        });
+
+                        const data = await response.json();
+
+                        if (!response.ok) {
+                            throw new Error(data.error || 'Failed to submit report');
+                        }
+
+                        this.message = `Report committed to public ledger!`;
+                        this.report = { sector: '', rating: 0, description: '' };
+                        this.photo_preview = null;
+                        this.photo_file = null;
+
+                    } catch (err) {
+                        this.error = err.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+
+                logout() {
+                    localStorage.removeItem('accessToken');
+                    localStorage.removeItem('refreshToken');
+                    this.accessToken = null;
+                    this.refreshToken = null;
+                    this.step = 'request_otp';
+                    this.form = {
+                        first_name: '',
+                        surname: '',
+                        id_number: '',
+                        phone_number: '',
+                        ward_id: ''
+                    };
+                    this.message = 'Logged out. Your data is encrypted.';
+                }
+            };
+        }
+
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        }
+
+        if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+            location.protocol = 'https:';
+        }
+    </script>
+</body>
+</html>
