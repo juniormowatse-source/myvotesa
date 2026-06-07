@@ -1,0 +1,60 @@
+{
+  "short_name": "CivicLedger",
+  "name": "Ward Civic Accountability Ledger",
+  "description": "SASSA-verified civic accountability platform. Report infrastructure failures, rate sector performance, submit photographic evidence to public ledger.",
+  "icons": [
+    {
+      "src": "https://img.icons8.com/color/192/test-passed.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "any"
+    },
+    {
+      "src": "https://img.icons8.com/color/512/test-passed.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any"
+    }
+  ],
+  "start_url": "/index.html",
+  "scope": "/",
+  "background_color": "#F3F4F6",
+  "theme_color": "#2563eb",
+  "display": "standalone",
+  "orientation": "portrait",
+  "screenshots": [
+    {
+      "src": "https://img.icons8.com/color/512/test-passed.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow"
+    }
+  ],
+  "categories": ["productivity", "civic"],
+  "shortcuts": [
+    {
+      "name": "Submit Report",
+      "short_name": "Report",
+      "description": "Quickly submit a civic infrastructure report",
+      "url": "/index.html?action=report",
+      "icons": [
+        {
+          "src": "https://img.icons8.com/color/192/test-passed.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "View Leaderboard",
+      "short_name": "Leaderboard",
+      "description": "View sector performance ratings",
+      "url": "/index.html?action=leaderboard",
+      "icons": [
+        {
+          "src": "https://img.icons8.com/color/192/test-passed.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}
