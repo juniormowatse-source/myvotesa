@@ -4,6 +4,8 @@ import cors from 'cors';
 import authRoutes from './routes/auth.js';
 import healthRoutes from './routes/health.js';
 import reportsRoutes from './routes/reports.js';
+// 1. ADD THIS IMPORT LINE HERE:
+import { errorHandler } from './middleware/errorHandler.js'; 
 
 const app = express();
 
@@ -32,6 +34,9 @@ app.use('/api/reports', reportsRoutes);
 app.get('/', (req, res) => {
     res.status(200).json({ status: "Backend server running smoothly" });
 });
+
+// 2. ADD THIS MIDDLEWARE REGISTER LINE HERE (Right before app.listen):
+app.use(errorHandler); 
 
 // Dynamic Port Binding for Render Cloud Environment
 const PORT = process.env.PORT || 5000;
