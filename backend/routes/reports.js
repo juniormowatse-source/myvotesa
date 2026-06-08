@@ -3,7 +3,7 @@ import { body, validationResult } from 'express-validator';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
-import { authenticateToken } from '../middleware/auth.js';
+import { protect as authenticateToken } from '../middleware/auth.js';
 import Report from '../models/Report.js';
 import { AppError } from '../middleware/errorHandler.js';
 import logger from '../utils/logger.js';
