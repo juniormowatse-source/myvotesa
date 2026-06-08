@@ -32,15 +32,28 @@ const validateVerification = [
     .withMessage('Surname contains invalid characters'),
   body('phone_number')
     .trim()
-    .matches(/^27\d{9}$|^0\d{9}$/)
-    .withMessage('Invalid South African phone number (RICA format required)'),
+    .customSanitizer(value => {
+      if (!value) return value;
+      let cleaned = value.replace(/\s+/g, '');
+      if (cleaned.startsWith('0')) {
+        return '+27' + cleaned.substring(1);
+      }
+      if (cleaned.startsWith('27')) {
+        return '+' + cleaned;
+      }
+      if (!cleaned.startsWith('+')) {
+        return '+' + cleaned;
+      }
+      return cleaned;
+    })
+    .matches(/^\+27\d{9}$/)
+    .withMessage('Invalid South African phone number (International +27 format required)'),
   body('ward_id')
     .isInt({ min: 1, max: 999 })
     .withMessage('Invalid ward number')
 ];
 
 // ============ STEP 1: REQUEST OTP ============
-
 /**
  * POST /api/auth/request-otp
  * User submits ID + phone, system sends OTP via SMS
@@ -270,7 +283,6 @@ router.post('/refresh', async (req, res, next) => {
       accessToken: newAccessToken,
       expiresIn: '7d'
     });
-
   } catch (error) {
     next(error);
   }
