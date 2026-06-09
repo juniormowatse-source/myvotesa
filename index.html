@@ -21,7 +21,6 @@
         <header class="mb-12">
             <div class="flex flex-col sm:flex-row justify-between items-start gap-6">
                 <div class="flex items-center gap-4">
-                    <!-- My Vote SA Custom Civic Tech Logo -->
                     <div class="w-14 h-14 bg-emerald-600/10 border border-emerald-500/30 rounded-2xl flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-950/50 shrink-0">
                         <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -60,6 +59,10 @@
                     <div class="flex justify-between border-b border-zinc-900 pb-2">
                         <span class="text-zinc-500">LEDGER_STATUS:</span>
                         <span class="text-amber-400">awaiting-community-verification</span>
+                    </div>
+                    <div class="flex justify-between border-b border-zinc-900 pb-2">
+                        <span class="text-zinc-500">GEOPOLITICAL_NODE:</span>
+                        <span class="text-zinc-200 font-medium" x-text="latestBlock.location"></span>
                     </div>
                     <div class="pt-1">
                         <span class="text-zinc-500 block mb-1.5">CONSTITUTIONAL_ANCHORS:</span>
@@ -105,13 +108,13 @@
                 </div>
             </div>
 
-            <!-- Group 2: Incident Parameters -->
+            <!-- Group 2: Incident Parameters & Regional Fragmentation -->
             <div class="bg-zinc-900/60 rounded-3xl p-6 border border-zinc-800/80 shadow-md">
                 <h2 class="text-lg font-semibold mb-5 flex items-center gap-2 text-zinc-200">
                     <i class="fa-solid fa-file-lines text-zinc-400 text-sm"></i> Service Failure Parameters
                 </h2>
                 
-                <div class="mb-6">
+                <div class="mb-5">
                     <label class="block text-xs font-medium text-zinc-400 mb-1.5">Target Accountability Sector</label>
                     <select x-model="form.sector" required
                             class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none transition-all text-zinc-300">
@@ -124,7 +127,42 @@
                     </select>
                 </div>
 
-                <div class="mb-6">
+                <!-- Geopolitical Mapping Node Boundary Fields -->
+                <div class="border-t border-zinc-800/60 pt-5 mt-5 space-y-4">
+                    <label class="block text-xs font-bold text-emerald-400 uppercase tracking-wider">Geopolitical Mapping Node</label>
+                    
+                    <div>
+                        <label class="block text-xs font-medium text-zinc-400 mb-1.5">Province</label>
+                        <select x-model="form.province" required
+                                class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none transition-all text-zinc-300">
+                            <option value="">Select Province</option>
+                            <option value="Eastern Cape">Eastern Cape</option>
+                            <option value="Free State">Free State</option>
+                            <option value="Gauteng">Gauteng</option>
+                            <option value="KwaZulu-Natal">KwaZulu-Natal</option>
+                            <option value="Limpopo">Limpopo</option>
+                            <option value="Mpumalanga">Mpumalanga</option>
+                            <option value="North West">North West</option>
+                            <option value="Northern Cape">Northern Cape</option>
+                            <option value="Western Cape">Western Cape</option>
+                        </select>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-4">
+                        <div class="col-span-2">
+                            <label class="block text-xs font-medium text-zinc-400 mb-1.5">Local Municipality</label>
+                            <input type="text" x-model="form.municipality" required placeholder="e.g., City of Cape Town"
+                                   class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-700 text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium text-zinc-400 mb-1.5">Ward Number</label>
+                            <input type="text" x-model="form.ward" required placeholder="Ward 57"
+                                   class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-700 text-sm font-mono">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t border-zinc-800/60 pt-5 mt-5">
                     <label class="block text-xs font-medium text-zinc-400 mb-2">Performance Assessment Rating</label>
                     <div class="flex gap-2">
                         <template x-for="n in 5" :key="n">
@@ -138,11 +176,11 @@
                     </div>
                 </div>
 
-                <div>
+                <div class="mt-5">
                     <label class="block text-xs font-medium text-zinc-400 mb-1.5">Evidentiary Description <span class="text-zinc-600">(Minimum 10 Characters)</span></label>
                     <textarea x-model="form.description" rows="5" minlength="10" required
                               class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-3xl px-5 py-4 focus:outline-none focus:ring-1 focus:ring-zinc-700 resize-y transition-all placeholder:text-zinc-700"
-                              placeholder="Provide direct evidence details, location markers, ward numbers, dates, or institutional names..."></textarea>
+                              placeholder="Provide direct evidence details, specific street locations, service disruption patterns, dates, or institutional names..."></textarea>
                     <div class="flex justify-between items-center mt-2 px-1">
                         <p class="text-[11px] text-zinc-500 font-mono" x-text="form.description.length + ' chars compiled'"></p>
                     </div>
@@ -154,7 +192,7 @@
                 <h2 class="text-lg font-semibold mb-4 text-zinc-200">Incident Evidence Upload</h2>
                 <input type="file" id="evidence" accept="image/*,video/*" @change="handleFileSelect" class="hidden">
                 <label for="evidence"
-                       class="cursor-pointer border-2 border-dashed border-zinc-800 hover:border-zinc-700 rounded-3xl h-44 flex flex-col items-center justify-center transition-all bg-zinc-950/40 hover:bg-zinc-950/80">
+                       class="cursor-pointer border-2 border-dashed border-zinc-800 hover:border-dashed hover:border-zinc-700 rounded-3xl h-44 flex flex-col items-center justify-center transition-all bg-zinc-950/40 hover:bg-zinc-950/80">
                     <i class="fa-solid fa-camera text-2xl mb-2 text-zinc-500"></i>
                     <span class="text-xs font-medium text-zinc-400">Capture asset metadata or upload file</span>
                     <span class="text-[10px] text-zinc-600 mt-1">Image / Video formats accepted (Max 5MB)</span>
@@ -193,6 +231,9 @@
                     surname: '',
                     idNumber: '',
                     sector: '',
+                    province: '',
+                    municipality: '',
+                    ward: '',
                     rating: 0,
                     description: '',
                     evidence: null
@@ -239,6 +280,9 @@
                            this.form.surname.trim() && 
                            this.form.idNumber.length === 13 &&
                            this.form.sector && 
+                           this.form.province && 
+                           this.form.municipality.trim() && 
+                           this.form.ward.trim() && 
                            this.form.rating > 0 &&
                            this.form.description.trim().length >= 10;
                 },
@@ -256,6 +300,9 @@
                         formData.append('surname', this.form.surname.trim());
                         formData.append('idNumber', this.form.idNumber.trim());
                         formData.append('sector', this.form.sector);
+                        formData.append('province', this.form.province);
+                        formData.append('municipality', this.form.municipality.trim());
+                        formData.append('ward', this.form.ward.trim());
                         formData.append('rating', this.form.rating);
                         formData.append('description', this.form.description.trim());
                         if (this.form.evidence) {
@@ -272,14 +319,16 @@
                         if (res.ok) {
                             this.success = true;
                             
-                            // Capture core parameters returned directly from backend tracking logic
                             this.latestBlock = {
                                 ticketId: data.ticketId,
-                                anchors: data.anchors || []
+                                anchors: data.anchors || [],
+                                location: data.location
                             };
                             
-                            // Flush data configurations gracefully
                             this.form.sector = '';
+                            this.form.province = '';
+                            this.form.municipality = '';
+                            this.form.ward = '';
                             this.form.rating = 0;
                             this.form.description = '';
                             this.form.evidence = null;

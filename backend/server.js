@@ -4,33 +4,28 @@ import crypto from 'crypto';
 import multer from 'multer';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
-import path from 'path'; // Clean top-level ES module import
+import path from 'path';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Configuration Safetynets
 const ID_SALT = process.env.ID_SALT || 'MzI1OTYyMTU0Nzg5U0FfQ0lWSUNfTEVER0VS';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/my_vote_sa';
 
-// Standard Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// 🔒 SECURE FRONTEND DELIVERY
-// Serves ONLY the index.html file at the root URL, keeping server code safely hidden
 app.get('/', (req, res) => {
     res.sendFile(path.resolve('index.html'));
 });
 
-// In-Memory Multi-part stream config for incoming attachments
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
-    limits: { fileSize: 5 * 1024 * 1024 }, // Hard 5MB Ceiling
+    limits: { fileSize: 5 * 1024 * 1024 },
     fileFilter: (req, file, cb) => {
         if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
             cb(null, true);
@@ -40,17 +35,19 @@ const upload = multer({
     }
 });
 
-// Database Engine Bootup
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✓ Connected cleanly to Ledger Primary database.'))
   .catch(err => console.error('Critical Database connection failure:', err));
 
-// MongoDB Document Schema Architecture
+// MongoDB Document Schema Architecture with Geopolitical Fragmentation
 const reportSchema = new mongoose.Schema({
     ticketId: { type: String, required: true, unique: true },
     citizen_name: { type: String, required: true },
     citizen_id_hashed: { type: String, required: true },
     sector: { type: String, enum: ['saps','health','water','electricity','roads'], required: true },
+    province: { type: String, required: true },
+    municipality: { type: String, required: true },
+    ward: { type: String, required: true },
     rating: { type: Number, required: true, min: 1, max: 5 },
     description: { type: String, required: true, minlength: 10 },
     evidence_hash: { type: String, default: null },
@@ -80,32 +77,28 @@ function assignConstitutionalAnchors(sector) {
     }
 }
 
-// Single-Pass Entry Unified Ingestion Endpoint
 app.post('/api/reports', (req, res, next) => {
-    // Gracefully catch Multer file validation errors before it hits main logic execution
     upload.single('evidence')(req, res, (err) => {
         if (err) return res.status(400).json({ error: err.message });
         next();
     });
 }, async (req, res) => {
     try {
-        const { firstName, surname, idNumber, sector, rating, description } = req.body;
+        const { firstName, surname, idNumber, sector, rating, description, province, municipality, ward } = req.body;
 
-        // Validation Fallbacks (Prevents undefined split/trim engine crashes)
-        if (!firstName || !surname || !idNumber || !sector || !rating || !description) {
+        // Validation Fallbacks including structural localization strings
+        if (!firstName || !surname || !idNumber || !sector || !rating || !description || !province || !municipality || !ward) {
             return res.status(400).json({ error: "Missing required fields in payload transaction." });
         }
         if (idNumber.length !== 13 || !/^\d{13}$/.test(idNumber)) {
             return res.status(400).json({ error: "Invalid South African Identification document layout." });
         }
 
-        // 1. Zero-Retention Cryptographic ID Hashing
         const citizenIdHashed = crypto
             .createHash('sha256')
             .update(idNumber + ID_SALT)
             .digest('hex');
 
-        // 2. Compute file attachment buffer signature if present
         let evidenceHash = null;
         if (req.file) {
             evidenceHash = crypto
@@ -114,20 +107,20 @@ app.post('/api/reports', (req, res, next) => {
                 .digest('hex');
         }
 
-        // 3. Structural Token Serial Generator
         const timestampMarker = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const uniqueNoise = crypto.randomBytes(3).toString('hex').toUpperCase();
         const ticketId = `TKT-${timestampMarker}-${uniqueNoise}`;
 
-        // 4. Map statutory tracking targets
         const constitutionalAnchors = assignConstitutionalAnchors(sector);
 
-        // 5. Instantiation & State commitment
         const finalLedgerEntry = new Report({
             ticketId,
             citizen_name: `${firstName.trim()} ${surname.trim()}`,
             citizen_id_hashed: citizenIdHashed,
             sector,
+            province: province.trim(),
+            municipality: municipality.trim(),
+            ward: ward.trim(),
             rating: parseInt(rating, 10),
             description: description.trim(),
             evidence_hash: evidenceHash,
@@ -136,12 +129,12 @@ app.post('/api/reports', (req, res, next) => {
 
         await finalLedgerEntry.save();
 
-        // Flush and respond
         return res.status(201).json({
             success: true,
             ticketId: ticketId,
             message: "Report committed flawlessly directly into the public ledger.",
-            anchors: constitutionalAnchors
+            anchors: constitutionalAnchors,
+            location: `${ward.trim()}, ${municipality.trim()}, ${province.trim()}`
         });
 
     } catch (error) {
