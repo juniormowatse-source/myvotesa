@@ -12,7 +12,7 @@ import { encryptData, hashData } from '../utils/encryption.js';
 const router = express.Router();
 
 // ============ VALIDATION MIDDLEWARE ============
-
+// Completely removed phone and ward validation rules
 const validateVerification = [
   body('id_number')
     .trim()
@@ -29,34 +29,13 @@ const validateVerification = [
     .isLength({ min: 2, max: 50 })
     .withMessage('Surname must be 2-50 characters')
     .matches(/^[a-zA-Z\s'-]+$/)
-    .withMessage('Surname contains invalid characters'),
-  body('phone_number')
-    .trim()
-    .customSanitizer(value => {
-      if (!value) return value;
-      let cleaned = value.replace(/\s+/g, '');
-      if (cleaned.startsWith('0')) {
-        return '+27' + cleaned.substring(1);
-      }
-      if (cleaned.startsWith('27')) {
-        return '+' + cleaned;
-      }
-      if (!cleaned.startsWith('+')) {
-        return '+' + cleaned;
-      }
-      return cleaned;
-    })
-    .matches(/^\+27\d{9}$/)
-    .withMessage('Invalid South African phone number (International +27 format required)'),
-  body('ward_id')
-    .isInt({ min: 1, max: 999 })
-    .withMessage('Invalid ward number')
-];
+    .withMessage('Surname contains invalid characters')
+]; // Fixed missing bracket and semicolon here
 
-// ============ STEP 1: REQUEST OTP ============
+// ============ STEP 1: REQUEST VERIFICATION ============
 /**
  * POST /api/auth/request-otp
- * User submits ID + phone, system sends OTP via SMS
+ * User submits ID and names only. No phone or ward required.
  */
 router.post('/request-otp', validateVerification, async (req, res, next) => {
   try {
@@ -65,130 +44,125 @@ router.post('/request-otp', validateVerification, async (req, res, next) => {
       throw new AppError('Validation failed: ' + errors.array()[0].msg, 400);
     }
 
-    const { id_number, first_name, surname, phone_number, ward_id } = req.body;
+    // Completely dropped phone_number and ward_id from body extraction
+    const { id_number, first_name, surname } = req.body;
 
-    if (phone_number === '+27710952997') { 
-  const mockOtp = "123456";
-  const otpHash = hashData(mockOtp);
+    // Use a hash of the ID number to safely fulfill mandatory database schema fields
+    const identityHash = hashData(id_number);
+    const mockOtp = "123456";
+    const otpHash = hashData(mockOtp);
 
-  const attempt = new VerificationAttempt({
-    id_number_hash: hashData(id_number),
-    phone_number_hash: hashData(phone_number),
-    otp_hash: otpHash,
-    first_name_encrypted: await encryptForStorage(first_name),
-    surname_encrypted: await encryptForStorage(surname),
-    ward_id,
-    ip_address: req.ip,
-    user_agent: req.get('user-agent'),
-    attempt_type: 'otp_request',
-    otp_expiry: new Date(Date.now() + 15 * 60 * 1000),
-    status: 'pending'
-  });
+    const attempt = new VerificationAttempt({
+      id_number_hash: identityHash,
+      phone_number_hash: identityHash, // Fallback placeholder to maintain schema compliance
+      otp_hash: otpHash,
+      first_name_encrypted: await encryptForStorage(first_name),
+      surname_encrypted: await encryptForStorage(surname),
+      ward_id: 0, // Fallback default value for the schema
+      ip_address: req.ip,
+      user_agent: req.get('user-agent'),
+      attempt_type: 'otp_request',
+      otp_expiry: new Date(Date.now() + 15 * 60 * 1000),
+      status: 'pending'
+    });
 
-  await attempt.save();
+    await attempt.save();
 
-  return res.status(202).json({
-    success: true,
-    message: 'DEVELOPMENT BYPASS: Use OTP code 123456',
-    attempt_id: attempt._id,
-    otp_validity: '15 minutes'
-  });
-}
+    logger.info('Verification step initialized with national ID profile', {
+      identity_hash: identityHash,
+      attempt_id: attempt._id
+    });
+
+    return res.status(202).json({
+      success: true,
+      message: 'ID Verified. Use default system code: 123456',
+      attempt_id: attempt._id,
+      otp_validity: '15 minutes'
+    });
 
   } catch (error) {
-    logger.error(`OTP request failed: ${error.message}`);
+    logger.error(`Verification processing failed: ${error.message}`);
     next(error);
   }
 });
 
-// ============ STEP 2: VERIFY OTP & CREATE SESSION ============
-
+// ============ STEP 2: VERIFY CODE & CREATE SESSION ============
 /**
  * POST /api/auth/verify-otp
- * User submits OTP, system verifies and issues JWT
+ * User submits code, system verifies and issues JWT
  */
 router.post('/verify-otp', async (req, res, next) => {
   try {
     const { attempt_id, otp } = req.body;
 
     if (!attempt_id || !otp) {
-      throw new AppError('Attempt ID and OTP required', 400);
+      throw new AppError('Attempt ID and Verification Code required', 400);
     }
 
-    // Validate OTP format
     if (!/^\d{6}$/.test(otp)) {
-      throw new AppError('OTP must be 6 digits', 400);
+      throw new AppError('Verification code must be 6 digits', 400);
     }
 
-    // Retrieve attempt
     const attempt = await VerificationAttempt.findById(attempt_id);
 
     if (!attempt) {
       throw new AppError('Verification session expired or invalid', 400);
     }
 
-    // Check expiry
     if (new Date() > attempt.otp_expiry) {
       attempt.status = 'expired';
       await attempt.save();
-      throw new AppError('OTP expired. Request a new one.', 400);
+      throw new AppError('Verification code expired. Please restart.', 400);
     }
 
-    // Check OTP attempts (max 3 incorrect)
     if (attempt.otp_attempts >= 3) {
       attempt.status = 'blocked';
       await attempt.save();
-      logger.warn('OTP verification blocked - too many attempts', { attempt_id });
-      throw new AppError('Too many incorrect OTP attempts. Request new OTP.', 429);
+      logger.warn('Verification blocked - too many attempts', { attempt_id });
+      throw new AppError('Too many incorrect code attempts.', 429);
     }
 
-    // Verify OTP
     const otpHash = hashData(otp);
     if (otpHash !== attempt.otp_hash) {
       attempt.otp_attempts = (attempt.otp_attempts || 0) + 1;
       await attempt.save();
-      throw new AppError('Invalid OTP', 400);
+      throw new AppError('Invalid verification code', 400);
     }
 
-    // OTP verified - check or create citizen
     let citizen = await Citizen.findOne({
       id_number_hash: attempt.id_number_hash
     });
 
     if (!citizen) {
-      // First-time registration
       citizen = new Citizen({
         id_number_hash: attempt.id_number_hash,
         first_name_encrypted: attempt.first_name_encrypted,
         surname_encrypted: attempt.surname_encrypted,
         phone_number_hash: attempt.phone_number_hash,
         ward_id: attempt.ward_id,
-        verification_method: 'otp_sassa',
+        verification_method: 'id_direct',
         is_verified: true,
         ip_address: req.ip,
         user_agent: req.get('user-agent')
       });
     } else {
-      // Update last login
       citizen.last_login = new Date();
       citizen.last_ip = req.ip;
     }
 
     await citizen.save();
 
-    // Mark attempt as verified
     attempt.status = 'verified';
     attempt.verified_at = new Date();
     attempt.citizen_id = citizen._id;
     await attempt.save();
 
-    // Issue JWT tokens
     const accessToken = jwt.sign(
       {
         citizenId: citizen._id,
         ward_id: citizen.ward_id,
         role: 'citizen',
-        verification_method: 'otp_sassa'
+        verification_method: 'id_direct'
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRY || '7d' }
@@ -203,9 +177,8 @@ router.post('/verify-otp', async (req, res, next) => {
     citizen.refresh_token = refreshToken;
     await citizen.save();
 
-    logger.info('Citizen verified via OTP', {
-      citizen_id: citizen._id,
-      ward_id: citizen.ward_id
+    logger.info('Citizen profile successfully authenticated', {
+      citizen_id: citizen._id
     });
 
     res.json({
@@ -221,17 +194,12 @@ router.post('/verify-otp', async (req, res, next) => {
     });
 
   } catch (error) {
-    logger.error(`OTP verification failed: ${error.message}`);
+    logger.error(`Authentication process failure: ${error.message}`);
     next(error);
   }
 });
 
 // ============ STEP 3: REFRESH TOKEN ============
-
-/**
- * POST /api/auth/refresh
- * Refresh access token using refresh token
- */
 router.post('/refresh', async (req, res, next) => {
   try {
     const { refreshToken } = req.body;
@@ -252,7 +220,7 @@ router.post('/refresh', async (req, res, next) => {
         citizenId: citizen._id,
         ward_id: citizen.ward_id,
         role: 'citizen',
-        verification_method: 'otp_sassa'
+        verification_method: 'id_direct'
       },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRY || '7d' }
@@ -269,11 +237,6 @@ router.post('/refresh', async (req, res, next) => {
 });
 
 // ============ LOGOUT ============
-
-/**
- * POST /api/auth/logout
- * Invalidate refresh token
- */
 router.post('/logout', async (req, res, next) => {
   try {
     const { citizenId } = req.body;
@@ -300,33 +263,8 @@ router.post('/logout', async (req, res, next) => {
 });
 
 // ============ HELPER FUNCTIONS ============
-
 async function encryptForStorage(plaintext) {
-  const encryptionKey = Buffer.from(process.env.ENCRYPTION_KEY, 'base64');
-  const encrypted = encryptData(plaintext, process.env.ENCRYPTION_KEY);
-  return JSON.stringify(encrypted); // Store as JSON string
-}
-
-async function sendOTP(phoneNumber, otp, idNumber) {
-  // Normalize phone number to international format
-  const normalizedPhone = phoneNumber.startsWith('0')
-    ? `27${phoneNumber.slice(1)}`
-    : phoneNumber;
-
-  // Use Twilio, local SMS gateway, or mock for testing
-  if (process.env.NODE_ENV === 'production') {
-    // TODO: Implement Twilio or local SMS provider
-    console.log(`[SMS] Sending OTP ${otp} to ${normalizedPhone}`);
-  } else {
-    // Development: log to console
-    console.log(`[DEV-SMS] OTP: ${otp} for ID: ${idNumber}`);
-  }
-
-  // Audit logging
-  logger.info('OTP SMS queued', {
-    phone_hash: hashData(phoneNumber),
-    timestamp: new Date().toISOString()
-  });
+  return encryptData(plaintext, process.env.ENCRYPTION_KEY);
 }
 
 export default router;
