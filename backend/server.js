@@ -8,25 +8,53 @@ import path from 'path';
 
 dotenv.config();
 
+// PRIORITY 13: CRITICAL ENVIRONMENT GUARDRAILS
+if (!process.env.MONGO_URI || !process.env.ID_SALT) {
+    console.error('\x1b[31m%s\x1b[0m', '❌ CRITICAL CONFIGURATION FAULT: MONGO_URI and ID_SALT must be defined.');
+    console.error('Ledger initialization process aborted to protect cryptographic signing integrity.');
+    process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+const ID_SALT = process.env.ID_SALT;
+const MONGO_URI = process.env.MONGO_URI;
 
-const ID_SALT = process.env.ID_SALT || 'MzI1OTYyMTU0Nzg5U0FfQ0lWSUNfTEVER0VS';
-const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/my_vote_sa';
-
-// Core Express Pipeline Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Serve the custom asset directory over public network traffic
 app.use('/assets', express.static(path.resolve('assets')));
+
+// PRIORITY 2: TRANSACTION NODE RATE LIMITER (10 Requests per 15-Min Window per Node IP)
+const transactionRateLimitMap = new Map();
+const LIMIT_WINDOW = 15 * 60 * 1000; 
+const MAX_LIMIT = 10;
+
+function ledgerRateLimiter(req, res, next) {
+    const nodeIp = req.ip || req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+    const currentTime = Date.now();
+    
+    if (!transactionRateLimitMap.has(nodeIp)) {
+        transactionRateLimitMap.set(nodeIp, []);
+    }
+    
+    let accessTimestamps = transactionRateLimitMap.get(nodeIp).filter(time => currentTime - time < LIMIT_WINDOW);
+    
+    if (accessTimestamps.length >= MAX_LIMIT) {
+        return res.status(429).json({ 
+            error: "Rate limit breached. Excessive block generation requests from this client connection node." 
+        });
+    }
+    
+    accessTimestamps.push(currentTime);
+    transactionRateLimitMap.set(nodeIp, accessTimestamps);
+    next();
+}
 
 app.get('/', (req, res) => {
     res.sendFile(path.resolve('index.html'));
 });
 
-// Multer Storage Pipeline for Document Verification
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
@@ -40,12 +68,10 @@ const upload = multer({
     }
 });
 
-// Database Connection Orchestrator
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✓ Connected cleanly to Ledger Primary database.'))
   .catch(err => console.error('Critical Database connection failure:', err));
 
-// MongoDB Document Schema Architecture with Geopolitical and Sector Taxonomy
 const reportSchema = new mongoose.Schema({
     ticketId: { type: String, required: true, unique: true },
     citizen_name: { type: String, required: true },
@@ -71,7 +97,6 @@ const reportSchema = new mongoose.Schema({
 
 const Report = mongoose.model('Report', reportSchema);
 
-// Assign Constitutional Anchors based on statutory obligations
 function assignConstitutionalAnchors(sector) {
     switch (sector) {
         case 'saps':
@@ -94,8 +119,8 @@ function assignConstitutionalAnchors(sector) {
     }
 }
 
-// Transaction Writing Block Endpoint
-app.post('/api/reports', (req, res, next) => {
+// Mounted Rate Limiting Protection directly onto the Write pipeline
+app.post('/api/reports', ledgerRateLimiter, (req, res, next) => {
     upload.single('evidence')(req, res, (err) => {
         if (err) return res.status(400).json({ error: err.message });
         next();
@@ -104,7 +129,6 @@ app.post('/api/reports', (req, res, next) => {
     try {
         const { firstName, surname, idNumber, sector, rating, description, province, municipality, ward } = req.body;
 
-        // Structured Fallback Validations
         if (!firstName || !surname || !idNumber || !sector || !rating || !description || !province || !municipality || !ward) {
             return res.status(400).json({ error: "Missing required fields in payload transaction." });
         }
@@ -112,7 +136,6 @@ app.post('/api/reports', (req, res, next) => {
             return res.status(400).json({ error: "Invalid South African Identification document layout." });
         }
 
-        // POPIA Compliant Cryptographic Hashing Engine
         const citizenIdHashed = crypto
             .createHash('sha256')
             .update(idNumber + ID_SALT)
@@ -126,7 +149,6 @@ app.post('/api/reports', (req, res, next) => {
                 .digest('hex');
         }
 
-        // Unique Decentralized Reference Generation
         const timestampMarker = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const uniqueNoise = crypto.randomBytes(3).toString('hex').toUpperCase();
         const ticketId = `TKT-${timestampMarker}-${uniqueNoise}`;

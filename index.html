@@ -17,14 +17,10 @@
 <body class="bg-zinc-950 text-zinc-100 min-h-screen pb-24">
     <div class="max-w-2xl mx-auto px-4 pt-10" x-data="ledgerApp()" x-init="init()">
         
-        <!-- Header & Custom Logo Identity Block -->
         <header class="mb-12">
             <div class="flex flex-col sm:flex-row justify-between items-start gap-6">
                 <div class="flex items-center gap-4">
-                    <!-- Mounted Custom Verified Image Asset Route -->
-                    <img src="/assets/logo.png" 
-                         alt="My Vote SA Logo" 
-                         class="w-14 h-14 object-contain bg-zinc-900 border border-zinc-800 rounded-2xl shadow-lg shadow-emerald-950/40 p-1 shrink-0">
+                    <img src="/assets/logo.png" alt="My Vote SA Logo" class="w-14 h-14 object-contain bg-zinc-900 border border-zinc-800 rounded-2xl shadow-lg shadow-emerald-950/40 p-1 shrink-0">
                     <div>
                         <h1 class="text-3xl font-extrabold tracking-tighter sm:text-4xl text-zinc-50">WARD CIVIC LEDGER</h1>
                         <p class="text-emerald-400 text-sm font-semibold tracking-wide uppercase mt-0.5">My Vote SA • Public Accountability Platform</p>
@@ -38,11 +34,10 @@
             
             <div class="mt-6 text-xs text-zinc-400 bg-zinc-900/40 border border-zinc-800/80 p-4 rounded-2xl flex items-center gap-3">
                 <i class="fa-solid fa-shield-halved text-amber-500 text-base shrink-0"></i>
-                <span><strong>POPIA Compliant Encryption Module:</strong> Raw South African ID numbers undergo zero-retention hashing instantly. Only verified civic records enter the decentralized ledger.</span>
+                <span><strong>POPIA Compliant Encryption Module:</strong> Raw South African ID numbers undergo zero-retention hashing instantly. Browser LocalStorage only holds baseline contact names for auto-fill rules.</span>
             </div>
         </header>
 
-        <!-- Dynamic Success Transaction Receipt Card -->
         <template x-if="success && latestBlock">
             <div class="mb-10 bg-zinc-900 border-2 border-emerald-500/30 rounded-3xl p-6 shadow-xl shadow-black/40 animate-fadeIn">
                 <div class="flex items-center gap-3 text-emerald-400 font-bold mb-4">
@@ -77,10 +72,8 @@
             </div>
         </template>
 
-        <!-- Main Data Record Submission Form -->
         <form @submit.prevent="submitReport" class="space-y-8" x-show="!latestBlock">
             
-            <!-- Group 1: Identity Profile -->
             <div class="bg-zinc-900/60 rounded-3xl p-6 border border-zinc-800/80 shadow-md">
                 <h2 class="text-lg font-semibold mb-5 flex items-center gap-2 text-zinc-200">
                     <i class="fa-solid fa-user text-zinc-400 text-sm"></i> Identity Verification
@@ -106,7 +99,6 @@
                 </div>
             </div>
 
-            <!-- Group 2: Incident Parameters & Regional Fragmentation -->
             <div class="bg-zinc-900/60 rounded-3xl p-6 border border-zinc-800/80 shadow-md">
                 <h2 class="text-lg font-semibold mb-5 flex items-center gap-2 text-zinc-200">
                     <i class="fa-solid fa-file-lines text-zinc-400 text-sm"></i> Service Failure Parameters
@@ -129,7 +121,6 @@
                     </select>
                 </div>
 
-                <!-- Geopolitical Mapping Node Boundary Fields -->
                 <div class="border-t border-zinc-800/60 pt-5 mt-5 space-y-4">
                     <label class="block text-xs font-bold text-emerald-400 uppercase tracking-wider">Geopolitical Mapping Node</label>
                     
@@ -189,7 +180,6 @@
                 </div>
             </div>
 
-            <!-- Group 3: Document Verification Attachments -->
             <div class="bg-zinc-900/60 rounded-3xl p-6 border border-zinc-800/80 shadow-md">
                 <h2 class="text-lg font-semibold mb-4 text-zinc-200">Incident Evidence Upload</h2>
                 <input type="file" id="evidence" accept="image/*,video/*" @change="handleFileSelect" class="hidden">
@@ -205,7 +195,6 @@
                 </div>
             </div>
 
-            <!-- Block Execution Trigger -->
             <button type="submit"
                     :disabled="isSubmitting || !isFormValid()"
                     class="w-full h-16 text-base font-bold rounded-3xl transition-all flex items-center justify-center gap-3 disabled:opacity-40 shadow-lg"
@@ -215,7 +204,6 @@
             </button>
         </form>
 
-        <!-- Fallback System Alert Messaging -->
         <div x-show="message && !latestBlock" class="mt-6 p-4 rounded-2xl text-xs font-mono border transition-all"
              :class="success ? 'bg-emerald-950/30 border-emerald-800/50 text-emerald-400' : 'bg-red-950/30 border-red-800/50 text-red-400'">
             <div class="flex items-start gap-2.5">
@@ -254,7 +242,7 @@
                             const parsed = JSON.parse(saved);
                             this.form.firstName = parsed.firstName || '';
                             this.form.surname = parsed.surname || '';
-                            this.form.idNumber = parsed.idNumber || '';
+                            // PRIORITY 1: Raw ID initialization removed to secure local files
                         } catch (e) {
                             localStorage.removeItem('civicIdentity');
                         }
@@ -327,6 +315,8 @@
                                 location: data.location
                             };
                             
+                            // Clear transient values completely out of standard application state
+                            this.form.idNumber = '';
                             this.form.sector = '';
                             this.form.province = '';
                             this.form.municipality = '';
@@ -336,10 +326,10 @@
                             this.form.evidence = null;
                             this.previewUrl = null;
                             
+                            // PRIORITY 1 RESOLVED: Persist only standard, non-sensitive identity strings
                             localStorage.setItem('civicIdentity', JSON.stringify({
                                 firstName: this.form.firstName,
-                                surname: this.form.surname,
-                                idNumber: this.form.idNumber
+                                surname: this.form.surname
                             }));
                         } else {
                             throw new Error(data.error || 'Ledger write pipeline deployment failure.');
