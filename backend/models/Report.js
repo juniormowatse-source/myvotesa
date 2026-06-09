@@ -1,3 +1,4 @@
+// backend/models/Report.js
 import mongoose from 'mongoose';
 
 const reportSchema = new mongoose.Schema(
@@ -17,7 +18,7 @@ const reportSchema = new mongoose.Schema(
 
     sector: {
       type: String,
-      enum: ['water', 'sanitation', 'electricity', 'roads'],
+      enum: ['water', 'sanitation', 'electricity', 'roads'], // Strictly matching your four sectors
       required: true,
       index: true
     },
@@ -36,9 +37,15 @@ const reportSchema = new mongoose.Schema(
       maxlength: 1000
     },
 
-    // PHASE 1: Photos stored publicly (no E2EE)
+    // Priority 4: Added to support geographic rendering on your Map Dashboard
+    gps_coordinates: {
+      lat: { type: Number, default: null },
+      lng: { type: Number, default: null }
+    },
+
+    // PHASE 1: Photos stored publicly
     photo_url: {
-      type: String, // Public URL to photo
+      type: String, 
       default: null
     },
 
@@ -57,7 +64,7 @@ const reportSchema = new mongoose.Schema(
 
     is_public: {
       type: Boolean,
-      default: true, // PHASE 1: Public by default
+      default: true, 
       index: true
     },
 
@@ -92,7 +99,7 @@ reportSchema.index({ ward_id: 1, sector: 1, rating: 1 });
 reportSchema.index({ ward_id: 1, created_at: -1 });
 reportSchema.index({ is_public: 1, created_at: -1 });
 
-// TTL index: Archive reports older than 1 year (PHASE 1 pilot)
+// TTL index: Archive reports older than 1 year
 reportSchema.index(
   { created_at: 1 },
   { expireAfterSeconds: 365 * 24 * 60 * 60 }
