@@ -1,0 +1,22 @@
+# Dependency Directories
+node_modules/
+
+# Environment Secrets
+.env
+.env.local
+.env.production
+
+# Media/Uploads 
+backend/uploads/
+
+# Operating System Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Code Editor Configurations
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
