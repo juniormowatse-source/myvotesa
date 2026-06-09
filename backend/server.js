@@ -39,12 +39,16 @@ mongoose.connect(MONGO_URI)
   .then(() => console.log('✓ Connected cleanly to Ledger Primary database.'))
   .catch(err => console.error('Critical Database connection failure:', err));
 
-// MongoDB Document Schema Architecture with Geopolitical Fragmentation
+// MongoDB Document Schema Architecture with expanded Municipal & Recreational nodes
 const reportSchema = new mongoose.Schema({
     ticketId: { type: String, required: true, unique: true },
     citizen_name: { type: String, required: true },
     citizen_id_hashed: { type: String, required: true },
-    sector: { type: String, enum: ['saps','health','water','electricity','roads'], required: true },
+    sector: { 
+        type: String, 
+        enum: ['saps','health','water','electricity','roads','parks','libraries','waste','sewage'], 
+        required: true 
+    },
     province: { type: String, required: true },
     municipality: { type: String, required: true },
     ward: { type: String, required: true },
@@ -68,10 +72,16 @@ function assignConstitutionalAnchors(sector) {
         case 'health':
             return ["Section 27: Right to Health Care Services", "National Health Act"];
         case 'water':
-            return ["Section 27: Right to Sufficient Water & Sanitation"];
+            return ["Section 27: Right to Sufficient Water"];
+        case 'sewage':
+        case 'waste':
+            return ["Section 24: Environment (Right to Health & Well-being)", "Section 152: Municipal Service Delivery Obligations"];
         case 'electricity':
         case 'roads':
-            return ["Section 152: Objects of Local Government (Service Delivery Failure)"];
+            return ["Section 152: Objects of Local Government (Infrastructure Delivery Failure)"];
+        case 'parks':
+        case 'libraries':
+            return ["Section 152: Objects of Local Government (Community Amenities & Social Infrastructure)"];
         default:
             return ["Section 195: Basic Values Governing Public Administration"];
     }
@@ -86,7 +96,6 @@ app.post('/api/reports', (req, res, next) => {
     try {
         const { firstName, surname, idNumber, sector, rating, description, province, municipality, ward } = req.body;
 
-        // Validation Fallbacks including structural localization strings
         if (!firstName || !surname || !idNumber || !sector || !rating || !description || !province || !municipality || !ward) {
             return res.status(400).json({ error: "Missing required fields in payload transaction." });
         }
