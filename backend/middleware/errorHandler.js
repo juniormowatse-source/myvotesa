@@ -1,43 +1,17 @@
-// Custom operational error class
-export class AppError extends Error {
-  constructor(message, statusCode) {
-    super(message);
-    this.statusCode = statusCode;
-    this.status = `${statusCode}`.startsWith('4') ? 'fail' : 'error';
-    this.isOperational = true;
+// backend/middleware/errorHandler.js
 
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
-// Global Express error handling middleware
-export const errorHandler = (err, req, res, next) => {
-  err.statusCode = err.statusCode || 500;
-  err.status = err.status || 'error';
+const errorHandler = (err, req, res, next) => {
+    // Log the error internally for auditing
+    console.error(`\x1b[31m[Ledger Error Interceptor]\x1b[0m: ${err.message}`);
+    if (err.stack) console.error(err.stack);
 
-  if (process.env.NODE_ENV === 'development') {
-    res.status(err.statusCode).json({
-      success: false,
-      status: err.status,
-      error: err,
-      message: err.message,
-      stack: err.stack
+    const statusCode = err.statusCode || 500;
+    
+    res.status(statusCode).json({
+        success: false,
+        error: err.message || "Internal ledger processing crash occurred during block execution."
     });
-  } else {
-    // Production mode (Render): Don't leak internal server details
-    if (err.isOperational) {
-      res.status(err.statusCode).json({
-        success: false,
-        status: err.status,
-        message: err.message
-      });
-    } else {
-      // Programming or unknown errors: log and send generic message
-      console.error('❌ ERROR 💥:', err);
-      res.status(500).json({
-        success: false,
-        status: 'error',
-        message: 'Something went completely wrong on the server.'
-      });
-    }
-  }
 };
+
+// This line satisfies the exact default import failing in new.png
+export default errorHandler;
