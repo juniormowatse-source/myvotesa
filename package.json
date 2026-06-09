@@ -5,7 +5,7 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
-    "build": "echo 'No build step required for static assets'",
+    "build": "true",
     "dev": "nodemon backend/server.js"
   },
   "dependencies": {
