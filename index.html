@@ -142,10 +142,23 @@
                     </div>
 
                     <div class="grid grid-cols-3 gap-4">
-                        <div class="col-span-2">
+                        <div class="col-span-2 relative">
                             <label class="block text-xs font-medium text-zinc-400 mb-1.5">Local Municipality</label>
-                            <input type="text" x-model="form.municipality" required placeholder="e.g., City of Cape Town"
+                            <input type="text" x-model="form.municipality" 
+                                   @input="showDropdown = true" 
+                                   @click.away="showDropdown = false"
+                                   autocomplete="off" required placeholder="e.g., City of Cape Town"
                                    class="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-700 rounded-2xl px-4 py-3 focus:outline-none focus:ring-1 focus:ring-zinc-700 transition-all placeholder:text-zinc-700 text-sm">
+                            
+                            <div x-show="showDropdown && form.municipality.trim().length > 0 && filteredMunicipalities.length > 0"
+                                 class="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-zinc-800 rounded-2xl max-h-48 overflow-y-auto z-50 shadow-xl shadow-black/50"
+                                 x-transition>
+                                <template x-for="muni in filteredMunicipalities" :key="muni">
+                                    <div @click="form.municipality = muni; showDropdown = false"
+                                         class="px-4 py-2.5 text-sm text-zinc-300 hover:bg-zinc-800 hover:text-emerald-400 cursor-pointer transition-colors"
+                                         x-text="muni"></div>
+                                </template>
+                            </div>
                         </div>
                         <div>
                             <label class="block text-xs font-medium text-zinc-400 mb-1.5">Ward Number</label>
@@ -234,6 +247,30 @@
                 message: '',
                 success: false,
                 latestBlock: null,
+                
+                showDropdown: false,
+                
+                saMunicipalities: [
+                    "City of Cape Town", "City of Johannesburg", "City of Tshwane", "City of Ekurhuleni", 
+                    "eThekwini", "Nelson Mandela Bay", "Buffalo City", "Mangaung",
+                    "Stellenbosch", "Drakenstein", "George", "Mossel Bay", "Saldanha Bay", "Knysna", "Overstrand", "Breede Valley",
+                    "Mogale City", "Emfuleni", "Lesedi", "Merafong City",
+                    "Msunduzi", "uMhlathuze", "Ray Nkonyeni", "Newcastle", "KwaDukuza",
+                    "Kouga", "King Sabata Dalindyebo", "Makana", "Ndlambe",
+                    "Matjhabeng", "Metsimaholo", "Dihlabeng",
+                    "Mbombela", "Emalahleni", "Steve Tshwete", "Govan Mbeki",
+                    "Polokwane", "Thulamela", "Makhado", "Ba-Phalaborwa",
+                    "Rustenburg", "Madibeng", "Matlosana", "Mahikeng",
+                    "Sol Plaatje", "Dawid Kruiper", "Nama Khoi"
+                ].sort(),
+
+                get filteredMunicipalities() {
+                    const query = this.form.municipality.toLowerCase().trim();
+                    if (!query) return [];
+                    return this.saMunicipalities.filter(muni => 
+                        muni.toLowerCase().startsWith(query)
+                    );
+                },
 
                 init() {
                     const saved = localStorage.getItem('civicIdentity');
@@ -242,7 +279,6 @@
                             const parsed = JSON.parse(saved);
                             this.form.firstName = parsed.firstName || '';
                             this.form.surname = parsed.surname || '';
-                            // PRIORITY 1: Raw ID initialization removed to secure local files
                         } catch (e) {
                             localStorage.removeItem('civicIdentity');
                         }
@@ -315,7 +351,6 @@
                                 location: data.location
                             };
                             
-                            // Clear transient values completely out of standard application state
                             this.form.idNumber = '';
                             this.form.sector = '';
                             this.form.province = '';
@@ -326,7 +361,6 @@
                             this.form.evidence = null;
                             this.previewUrl = null;
                             
-                            // PRIORITY 1 RESOLVED: Persist only standard, non-sensitive identity strings
                             localStorage.setItem('civicIdentity', JSON.stringify({
                                 firstName: this.form.firstName,
                                 surname: this.form.surname
