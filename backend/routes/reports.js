@@ -1,278 +1,185 @@
+// backend/routes/reports.js
 import express from 'express';
-import { body, validationResult } from 'express-validator';
+import crypto from 'crypto';
 import multer from 'multer';
-import path from 'path';
-import fs from 'fs';
-import { protect as authenticateToken } from '../middleware/auth.js';
-import Report from '../models/Report.js';
-import { AppError } from '../middleware/errorHandler.js';
-import logger from '../utils/logger.js';
+import Report from '../models/Report.js'; // Ensure your path matches your schema file
 
 const router = express.Router();
+const ID_SALT = process.env.ID_SALT;
 
-// ============ FILE UPLOAD CONFIGURATION ============
-// PHASE 1: Store photos publicly (no E2EE) for civic leaderboard
+// Setup transient memory buffer allocation for file streams
+const storage = multer.memoryStorage();
+const upload = multer({
+    storage: storage,
+    limits: { fileSize: 5 * 1024 * 1024 },
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('video/')) {
+            cb(null, true);
+        } else {
+            cb(new Error('Only images and videos are permissible asset payloads.'), false);
+        }
+    }
+});
 
-const uploadDir = process.env.UPLOAD_DIR || './uploads/reports';
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
+/**
+ * HELPER: Direct Constitutional Anchor Assignment Matrix
+ */
+function assignConstitutionalAnchors(sector) {
+    switch (sector) {
+        case 'saps': return ["Section 12: Freedom from Violence", "SAPS Act Compliance"];
+        case 'health': return ["Section 27: Right to Health Care Services", "National Health Act"];
+        case 'water': return ["Section 27: Right to Sufficient Water"];
+        case 'sewage':
+        case 'waste': return ["Section 24: Environment (Right to Health & Well-being)", "Section 152: Municipal Service Delivery Obligations"];
+        case 'electricity':
+        case 'roads': return ["Section 152: Objects of Local Government (Infrastructure Delivery Failure)"];
+        case 'parks':
+        case 'libraries': return ["Section 152: Objects of Local Government (Community Amenities & Social Infrastructure)"];
+        default: return ["Section 195: Basic Values Governing Public Administration"];
+    }
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Public filename format: ward_sector_timestamp.jpg
-    const uniqueName = `${req.user.ward_id}_${Date.now()}_${Math.round(Math.random() * 1e6)}${path.extname(file.originalname)}`;
-    cb(null, uniqueName);
-  }
-});
-
-const fileFilter = (req, file, cb) => {
-  const allowedTypes = (process.env.ALLOWED_FILE_TYPES || 'image/jpeg,image/png').split(',');
-  
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new AppError('Invalid file type. Only JPEG and PNG allowed', 400), false);
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: parseInt(process.env.MAX_FILE_SIZE) || 5 * 1024 * 1024 }
-});
-
-// ============ VALIDATION MIDDLEWARE ============
-
-const validateReport = [
-  body('sector')
-    .isIn(['water', 'sanitation', 'electricity', 'roads'])
-    .withMessage('Invalid sector'),
-  body('rating')
-    .isInt({ min: 1, max: 5 })
-    .withMessage('Rating must be between 1 and 5'),
-  body('description')
-    .trim()
-    .isLength({ min: 10, max: 1000 })
-    .withMessage('Description must be 10-1000 characters')
-];
-
-// ============ ROUTES ============
+/* ==========================================================================
+   PRIORITY 3: READ LAYER ENDPOINTS
+   ========================================================================== */
 
 /**
- * POST /api/reports
- * Create a new civic report (PUBLIC LEADERBOARD)
+ * 🔓 ENDPOINT 1: GET /api/reports
+ * Public Ledger Filter Engine (Supports province, municipality, sector, ward queries)
  */
-router.post('/',
-  authenticateToken,
-  upload.single('evidence_photo'),
-  validateReport,
-  async (req, res, next) => {
+router.get('/', async (req, res, next) => {
     try {
-      const errors = validationResult(req);
-      if (!errors.isEmpty()) {
-        throw new AppError('Validation failed: ' + errors.array()[0].msg, 400);
-      }
+        const { province, municipality, sector, ward } = req.query;
+        let queryFilter = {};
 
-      const { sector, rating, description } = req.body;
-      const { citizenId, ward_id } = req.user;
+        if (province) queryFilter.province = String(province);
+        if (municipality) queryFilter.municipality = String(municipality);
+        if (sector) queryFilter.sector = String(sector);
+        if (ward) queryFilter.ward = String(ward);
 
-      // Create report - FULLY PUBLIC (no E2EE)
-      const report = new Report({
-        citizen_id: citizenId,
-        ward_id,
-        sector,
-        rating: parseInt(rating),
-        description,
-        photo_url: req.file ? `/public/reports/${req.file.filename}` : null,
-        photo_filename: req.file ? req.file.filename : null,
-        status: 'published', // PHASE 1: Auto-publish all reports
-        is_public: true,
-        ip_address: req.ip
-      });
+        // Fetch blocks sorted by newest record entry
+        const publicLedger = await Report.find(queryFilter)
+            .select('-citizen_id_hashed') // Explicitly strip identity hashes out of open directory sweeps
+            .sort({ createdAt: -1 })
+            .limit(100);
 
-      await report.save();
+        return res.status(200).json({ success: true, count: publicLedger.length, ledger: publicLedger });
+    } catch (error) {
+        next(error);
+    }
+});
 
-      logger.info(`Report published to public ledger`, {
-        report_id: report._id,
-        ward_id,
-        sector,
-        rating
-      });
+/**
+ * 🔓 ENDPOINT 2: GET /api/reports/stats
+ * Aggregation Analytics Dashboard Pipeline
+ */
+router.get('/stats', async (req, res, next) => {
+    try {
+        const statisticalAggregation = await Report.aggregate([
+            {
+                $group: {
+                    _id: {
+                        province: "$province",
+                        municipality: "$municipality",
+                        sector: "$sector"
+                    },
+                    totalIncidents: { $sum: 1 },
+                    averageSeverityRating: { $avg: "$rating" }
+                }
+            },
+            { $sort: { totalIncidents: -1 } }
+        ]);
 
-      res.status(201).json({
-        success: true,
-        message: 'Report committed to public civic ledger',
-        reportId: report._id,
-        photo_url: req.file ? `/public/reports/${req.file.filename}` : null
-      });
+        return res.status(200).json({ success: true, metrics: statisticalAggregation });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/**
+ * 🔓 ENDPOINT 3: GET /api/reports/:ticketId
+ * Targeted Individual Block Audit Lookup
+ */
+router.get('/:ticketId', async (req, res, next) => {
+    try {
+        const { ticketId } = req.params;
+        const trackedReport = await Report.findOne({ ticketId }).select('-citizen_id_hashed');
+
+        if (!trackedReport) {
+            return res.status(404).json({ success: false, error: "Requested ledger block ticket identifier not found." });
+        }
+
+        return res.status(200).json({ success: true, report: trackedReport });
+    } catch (error) {
+        next(error);
+    }
+});
+
+/* ==========================================================================
+   WRITE LAYER ENDPOINT
+   ========================================================================== */
+
+/**
+ * 🔒 ENDPOINT 4: POST /api/reports
+ * Transaction Block Creation Entry
+ */
+router.post('/', upload.single('evidence'), async (req, res, next) => {
+    try {
+        const { firstName, surname, idNumber, sector, rating, description, province, municipality, ward } = req.body;
+
+        if (!firstName || !surname || !idNumber || !sector || !rating || !description || !province || !municipality || !ward) {
+            return res.status(400).json({ error: "Missing required transactional fields." });
+        }
+        if (idNumber.length !== 13 || !/^\d{13}$/.test(idNumber)) {
+            return res.status(400).json({ error: "Invalid South African Identification metadata template structure." });
+        }
+
+        // Cryptographic irreversible hashing phase
+        const citizenIdHashed = crypto
+            .createHash('sha256')
+            .update(idNumber + ID_SALT)
+            .digest('hex');
+
+        let evidenceHash = null;
+        if (req.file) {
+            evidenceHash = crypto
+                .createHash('sha256')
+                .update(req.file.buffer)
+                .digest('hex');
+        }
+
+        const timestampMarker = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+        const uniqueNoise = crypto.randomBytes(3).toString('hex').toUpperCase();
+        const ticketId = `TKT-${timestampMarker}-${uniqueNoise}`;
+
+        const constitutionalAnchors = assignConstitutionalAnchors(sector);
+
+        const newBlock = new Report({
+            ticketId,
+            citizen_name: `${firstName.trim()} ${surname.trim()}`,
+            citizen_id_hashed: citizenIdHashed,
+            sector,
+            province: province.trim(),
+            municipality: municipality.trim(),
+            ward: ward.trim(),
+            rating: parseInt(rating, 10),
+            description: description.trim(),
+            evidence_hash: evidenceHash,
+            constitutionalAnchors
+        });
+
+        await newBlock.save();
+
+        return res.status(201).json({
+            success: true,
+            ticketId: ticketId,
+            anchors: constitutionalAnchors,
+            location: `Ward ${ward.trim()}, ${municipality.trim()}, ${province.trim()}`
+        });
 
     } catch (error) {
-      // Clean up uploaded file if error occurs
-      if (req.file) {
-        fs.unlink(req.file.path, (err) => {
-          if (err) logger.error('Failed to delete file: ' + err.message);
-        });
-      }
-      next(error);
+        next(error);
     }
-  }
-);
-
-/**
- * GET /api/reports/ward/:wardId
- * Get all public reports for a ward (PUBLIC API - NO AUTH)
- * Used for civic leaderboard calculations
- */
-router.get('/ward/:wardId', async (req, res, next) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-
-    // PHASE 1: Return all reports (public)
-    const reports = await Report.find({
-      ward_id: parseInt(req.params.wardId),
-      is_public: true
-    })
-      .select('sector rating description photo_url created_at')
-      .sort({ created_at: -1 })
-      .limit(parseInt(limit))
-      .skip((parseInt(page) - 1) * parseInt(limit))
-      .lean();
-
-    const total = await Report.countDocuments({
-      ward_id: parseInt(req.params.wardId),
-      is_public: true
-    });
-
-    res.json({
-      success: true,
-      data: reports,
-      pagination: {
-        total,
-        page: parseInt(page),
-        limit: parseInt(limit),
-        pages: Math.ceil(total / parseInt(limit))
-      }
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/reports/leaderboard/:wardId
- * PUBLIC LEADERBOARD - Calculate sector performance ratings
- * Used by civic dashboard and politician accountability tracking
- */
-router.get('/leaderboard/:wardId', async (req, res, next) => {
-  try {
-    const wardId = parseInt(req.params.wardId);
-
-    // Aggregate ratings by sector
-    const leaderboard = await Report.aggregate([
-      {
-        $match: {
-          ward_id: wardId,
-          is_public: true
-        }
-      },
-      {
-        $group: {
-          _id: '$sector',
-          avg_rating: { $avg: '$rating' },
-          total_reports: { $sum: 1 },
-          status: {
-            $cond: [
-              { $gte: ['$rating', 4] },
-              'Performing',
-              { $cond: [{ $gte: ['$rating', 3] }, 'At Risk', 'Critical'] }
-            ]
-          }
-        }
-      },
-      {
-        $sort: { avg_rating: 1 } // Worst first
-      }
-    ]);
-
-    const sectorNames = {
-      water: 'Water Supply',
-      sanitation: 'Sanitation & Sewage',
-      electricity: 'Electricity Grid',
-      roads: 'Roads & Infrastructure'
-    };
-
-    const formatted = leaderboard.map(item => ({
-      sector: sectorNames[item._id] || item._id,
-      sector_code: item._id,
-      avg_rating: Math.round(item.avg_rating * 100) / 100,
-      total_reports: item.total_reports,
-      status: item.avg_rating >= 4 ? 'Performing' : item.avg_rating >= 3 ? 'At Risk' : 'Critical',
-      urgency: item.avg_rating < 2 ? 'EMERGENCY' : item.avg_rating < 3 ? 'HIGH' : 'MEDIUM'
-    }));
-
-    res.json({
-      success: true,
-      ward_id: wardId,
-      leaderboard: formatted,
-      generated_at: new Date().toISOString()
-    });
-
-  } catch (error) {
-    next(error);
-  }
-});
-
-/**
- * GET /api/reports/stats/ward/:wardId
- * PUBLIC STATISTICS - Ward performance overview
- */
-router.get('/stats/ward/:wardId', async (req, res, next) => {
-  try {
-    const wardId = parseInt(req.params.wardId);
-
-    const stats = await Report.aggregate([
-      {
-        $match: {
-          ward_id: wardId,
-          is_public: true
-        }
-      },
-      {
-        $facet: {
-          total_reports: [{ $count: 'count' }],
-          avg_rating: [{ $group: { _id: null, avg: { $avg: '$rating' } } }],
-          rating_distribution: [
-            { $group: { _id: '$rating', count: { $sum: 1 } } },
-            { $sort: { _id: 1 } }
-          ],
-          critical_issues: [
-            { $match: { rating: { $lt: 2 } } },
-            { $count: 'count' }
-          ]
-        }
-      }
-    ]);
-
-    res.json({
-      success: true,
-      ward_id: wardId,
-      stats: {
-        total_reports: stats[0].total_reports[0]?.count || 0,
-        avg_rating: Math.round((stats[0].avg_rating[0]?.avg || 0) * 100) / 100,
-        rating_distribution: stats[0].rating_distribution,
-        critical_issues: stats[0].critical_issues[0]?.count || 0
-      },
-      generated_at: new Date().toISOString()
-    });
-
-  } catch (error) {
-    next(error);
-  }
 });
 
 export default router;
