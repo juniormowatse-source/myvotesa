@@ -14,14 +14,19 @@ const PORT = process.env.PORT || 5000;
 const ID_SALT = process.env.ID_SALT || 'MzI1OTYyMTU0Nzg5U0FfQ0lWSUNfTEVER0VS';
 const MONGO_URI = process.env.MONGO_URI || 'mongodb://localhost:27017/my_vote_sa';
 
+// Core Express Pipeline Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve the custom asset directory over public network traffic
+app.use('/assets', express.static(path.resolve('assets')));
 
 app.get('/', (req, res) => {
     res.sendFile(path.resolve('index.html'));
 });
 
+// Multer Storage Pipeline for Document Verification
 const storage = multer.memoryStorage();
 const upload = multer({
     storage: storage,
@@ -35,11 +40,12 @@ const upload = multer({
     }
 });
 
+// Database Connection Orchestrator
 mongoose.connect(MONGO_URI)
   .then(() => console.log('✓ Connected cleanly to Ledger Primary database.'))
   .catch(err => console.error('Critical Database connection failure:', err));
 
-// MongoDB Document Schema Architecture with expanded Municipal & Recreational nodes
+// MongoDB Document Schema Architecture with Geopolitical and Sector Taxonomy
 const reportSchema = new mongoose.Schema({
     ticketId: { type: String, required: true, unique: true },
     citizen_name: { type: String, required: true },
@@ -65,6 +71,7 @@ const reportSchema = new mongoose.Schema({
 
 const Report = mongoose.model('Report', reportSchema);
 
+// Assign Constitutional Anchors based on statutory obligations
 function assignConstitutionalAnchors(sector) {
     switch (sector) {
         case 'saps':
@@ -87,6 +94,7 @@ function assignConstitutionalAnchors(sector) {
     }
 }
 
+// Transaction Writing Block Endpoint
 app.post('/api/reports', (req, res, next) => {
     upload.single('evidence')(req, res, (err) => {
         if (err) return res.status(400).json({ error: err.message });
@@ -96,6 +104,7 @@ app.post('/api/reports', (req, res, next) => {
     try {
         const { firstName, surname, idNumber, sector, rating, description, province, municipality, ward } = req.body;
 
+        // Structured Fallback Validations
         if (!firstName || !surname || !idNumber || !sector || !rating || !description || !province || !municipality || !ward) {
             return res.status(400).json({ error: "Missing required fields in payload transaction." });
         }
@@ -103,6 +112,7 @@ app.post('/api/reports', (req, res, next) => {
             return res.status(400).json({ error: "Invalid South African Identification document layout." });
         }
 
+        // POPIA Compliant Cryptographic Hashing Engine
         const citizenIdHashed = crypto
             .createHash('sha256')
             .update(idNumber + ID_SALT)
@@ -116,6 +126,7 @@ app.post('/api/reports', (req, res, next) => {
                 .digest('hex');
         }
 
+        // Unique Decentralized Reference Generation
         const timestampMarker = new Date().toISOString().slice(0, 10).replace(/-/g, '');
         const uniqueNoise = crypto.randomBytes(3).toString('hex').toUpperCase();
         const ticketId = `TKT-${timestampMarker}-${uniqueNoise}`;
@@ -143,7 +154,7 @@ app.post('/api/reports', (req, res, next) => {
             ticketId: ticketId,
             message: "Report committed flawlessly directly into the public ledger.",
             anchors: constitutionalAnchors,
-            location: `${ward.trim()}, ${municipality.trim()}, ${province.trim()}`
+            location: `Ward ${ward.trim()}, ${municipality.trim()}, ${province.trim()}`
         });
 
     } catch (error) {
