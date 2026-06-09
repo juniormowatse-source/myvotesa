@@ -5,6 +5,7 @@
   "main": "backend/server.js",
   "scripts": {
     "start": "node backend/server.js",
+    "build": "mkdir -p build && cp index.html manifest.json sw.js build/",
     "dev": "nodemon backend/server.js"
   },
   "dependencies": {
